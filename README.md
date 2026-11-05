@@ -4,6 +4,8 @@ FlyerFix helps community organizers check that key event details survive a socia
 
 **Hackathon theme:** Build for Your World.
 
+[Project site and interactive crop demo](https://flyerfix-guillermobarretos-projects.vercel.app/)
+
 ## Screenshot
 
 ![FlyerFix desktop app comparing the original library flyer with its square crop, alongside an example caption](screenshot.jpg)
