@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FlyerFix — Check your crop before you post</title>
+<meta name="description" content="FlyerFix helps community organizers check that key event details survive a social media crop. A desktop app built for the Meta AI Developer Hackathon.">
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background: #111; color: #e8e8e8; line-height: 1.55; }
+  main { max-width: 860px; margin: 0 auto; padding: 48px 20px 64px; }
+  h1 { font-size: 2.4rem; margin: 0 0 8px; }
+  .tagline { font-size: 1.2rem; color: #bdbdbd; margin: 0 0 24px; }
+  .note { border: 1px solid #333; border-radius: 10px; padding: 14px 18px; background: #1a1a1a; margin: 24px 0; }
+  .note strong { color: #fff; }
+  h2 { margin-top: 40px; }
+  .shots { display: flex; gap: 16px; flex-wrap: wrap; }
+  figure { margin: 0; flex: 1 1 300px; }
+  figure img { width: 100%; border-radius: 10px; border: 1px solid #333; background: #fff; }
+  figcaption { color: #bdbdbd; font-size: 0.9rem; margin-top: 6px; }
+  code { background: #1e1e1e; border: 1px solid #333; border-radius: 6px; padding: 1px 6px; }
+  pre { background: #1a1a1a; border: 1px solid #333; border-radius: 10px; padding: 16px; overflow-x: auto; }
+  pre code { background: none; border: none; padding: 0; }
+  a { color: #7dd3fc; }
+  .buttons { display: flex; gap: 12px; flex-wrap: wrap; margin: 24px 0; }
+  .buttons a, .buttons button { display: inline-block; background: #e8e8e8; color: #111; font-weight: 600; text-decoration: none; padding: 10px 18px; border-radius: 8px; border: none; font-size: 1rem; cursor: pointer; }
+  .buttons a.secondary, .buttons button.secondary { background: transparent; color: #e8e8e8; border: 1px solid #555; }
+  footer { color: #999; font-size: 0.9rem; margin-top: 48px; }
+  /* Live crop demo */
+  .demo-wrap { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; }
+  .demo { position: relative; flex: 1 1 300px; max-width: 380px; border-radius: 10px; overflow: hidden; border: 1px solid #333; }
+  .demo img.base { width: 100%; display: block; filter: brightness(0.4); background: #fff; }
+  .demo .window { position: absolute; left: 0; top: 0; width: 100%; overflow: hidden; border-bottom: 3px solid #7dd3fc; }
+  .demo .window img { display: block; width: 100%; background: #fff; }
+  .demo .window::after { content: "CROP"; position: absolute; right: 8px; bottom: 8px; background: #7dd3fc; color: #111; font-size: 0.75rem; font-weight: 700; padding: 2px 8px; border-radius: 4px; }
+  .demo-panel { flex: 1 1 280px; }
+  .demo-panel input[type="range"] { width: 100%; }
+  .checklist { list-style: none; padding: 0; margin: 16px 0; }
+  .checklist li { padding: 6px 0; border-bottom: 1px solid #222; }
+  .checklist .ok { color: #86efac; }
+  .checklist .lost { color: #fca5a5; text-decoration: line-through; }
+  .small { color: #999; font-size: 0.9rem; }
+
+  .crop-editor { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 20px; }
+  .crop-editor canvas { display:block; width:100%; height:auto; margin-top:12px; border:1px solid #555; border-radius:8px; }
+  .crop-editor label { display:block; margin:12px 0 4px; }
+  .crop-editor input[type=range] { width:100%; }
+  .crop-editor button:disabled { opacity:.5; cursor:default; }
+  @media (max-width:640px) { .crop-editor { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>FlyerFix</h1>
+  <p class="tagline">Check your crop before you post.</p>
+  <p>FlyerFix helps community organizers check that key event details survive a social media crop. It compares the original flyer with the version you plan to post, flags details that are missing, changed, or hard to read, and drafts a plain-text caption for review.</p>
+
+  <div class="buttons">
+    <a href="https://github.com/GuillermoBarreto/flyerfix">View on GitHub</a>
+    <a class="secondary" href="#crop-editor">Crop your flyer</a>
+    <a class="secondary" href="#run-it">Run it locally</a>
+  </div>
+
+  <section id="crop-editor">
+    <h2>Crop your own flyer</h2>
+    <p>Choose a format, reposition the crop, and download a PNG. Your image stays in this browser. To check which event details are missing with Muse Spark, use the desktop app.</p>
+    <div class="crop-editor">
+      <div>
+        <label for="flyerFile">Flyer image</label>
+        <input id="flyerFile" type="file" accept="image/png,image/jpeg,image/webp">
+        <label for="cropRatio">Post format</label>
+        <select id="cropRatio">
+          <option value="1">Square (1:1)</option>
+          <option value="0.8">Portrait (4:5)</option>
+          <option value="0.5625">Story (9:16)</option>
+        </select>
+        <label for="cropX">Horizontal position</label>
+        <input id="cropX" type="range" min="0" max="100" value="50">
+        <label for="cropY">Vertical position</label>
+        <input id="cropY" type="range" min="0" max="100" value="50">
+        <div class="buttons">
+          <button id="saveCrop" type="button" disabled>Download crop</button>
+          <button id="resetCrop" class="secondary" type="button">Reset to sample</button>
+        </div>
+        <p id="cropStatus" class="small" role="status"></p>
+      </div>
+      <div>
+        <strong>Crop preview</strong>
+        <canvas id="cropPreview" role="img" aria-label="Preview of the cropped flyer"></canvas>
+      </div>
+    </div>
+  </section>
+
+  <h2>Try the crop, live</h2>
+  <p>Drag the slider to shrink the crop, or let the animation run. Watch what disappears from the sample flyer first. This is an illustration of the idea — the desktop app checks your actual flyers with Muse Spark.</p>
+  <div class="demo-wrap">
+    <div class="demo" id="demo">
+      <img class="base" src="original.png" alt="Original fictional library movie-night flyer, dimmed outside the crop">
+      <div class="window" id="cropWindow"><img src="original.png" alt=""></div>
+    </div>
+    <div class="demo-panel">
+      <label for="cropSlider"><strong>Crop height: <span id="cropValue">100%</span></strong></label>
+      <input type="range" id="cropSlider" min="78" max="100" value="100">
+      <div class="buttons">
+        <button id="playBtn" class="secondary" type="button">▶ Play animation</button>
+      </div>
+      <ul class="checklist" id="checklist">
+        <li data-detail="date">📅 Date — <span class="ok">Visible</span></li>
+        <li data-detail="time">🕖 Time — <span class="ok">Visible</span></li>
+        <li data-detail="room">📍 Room — <span class="ok">Visible</span></li>
+        <li data-detail="rsvp">✉️ RSVP deadline — <span class="ok">Visible</span></li>
+      </ul>
+      <p class="small">Square crop = 78% height. The sample crop keeps the date and time, but cuts the room and the RSVP deadline.</p>
+    </div>
+  </div>
+
+  <h2>The problem, in one picture</h2>
+  <p>The crop keeps the date and time, but cuts off the room and the RSVP deadline. That is exactly what FlyerFix catches. Both images below are the fictional sample flyers included in the repo.</p>
+  <div class="shots">
+    <figure>
+      <img src="original.png" alt="Original fictional library movie-night flyer">
+      <figcaption>Original flyer — full details visible.</figcaption>
+    </figure>
+    <figure>
+      <img src="crop.png" alt="Square social media crop of the same flyer">
+      <figcaption>Square crop — room and RSVP deadline cut off.</figcaption>
+    </figure>
+  </div>
+
+  <h2>How it works</h2>
+  <ul>
+    <li>Pick your original flyer and your social crop, or load the included sample.</li>
+    <li>FlyerFix resizes large images and sends both JPEGs to the Meta Model API in one chat completion (Muse Spark 1.3).</li>
+    <li>You get a crop check (Visible, Missing, Hard to read, Changed), a standalone caption built from the original, and a "Verify before posting" section for anything unclear.</li>
+    <li>The organizer reviews the result before posting. Nothing is sent anywhere until you click Compare, and the app never writes your key to disk.</li>
+  </ul>
+
+  <h2 id="run-it">Run it</h2>
+  <p>Python 3.10 or later with Tkinter, plus a Meta Model API key with access to Muse Spark 1.3.</p>
+  <pre><code id="runCommands">python -m pip install -r requirements.txt
+python flyerfix.py</code></pre>
+  <div class="buttons">
+    <button id="copyBtn" class="secondary" type="button">Copy commands</button>
+  </div>
+  <p>Enter your key in the masked field, or provide it through the <code>MODEL_API_KEY</code> environment variable.</p>
+
+  <footer>
+    <p>Built for the Meta Global AI Developer Hackathon — Indie track, "Build for Your World" theme. Sample flyers are fictional.</p>
+  </footer>
+</main>
+<script>
+  var slider = document.getElementById('cropSlider');
+  var win = document.getElementById('cropWindow');
+  var value = document.getElementById('cropValue');
+  var playBtn = document.getElementById('playBtn');
+  var timer = null, dir = -1;
+
+  function render(h) {
+    win.style.height = h + '%';
+    value.textContent = h + '%';
+    var states = {
+      date: 'Visible', time: 'Visible',
+      room: h < 85 ? 'Cut off' : 'Visible',
+      rsvp: h < 95 ? 'Cut off' : 'Visible'
+    };
+    var items = document.querySelectorAll('#checklist li');
+    items.forEach(function (li) {
+      var s = states[li.getAttribute('data-detail')];
+      var span = li.querySelector('span');
+      span.textContent = s;
+      span.className = s === 'Visible' ? 'ok' : 'lost';
+    });
+  }
+  slider.addEventListener('input', function () {
+    stop();
+    render(parseInt(slider.value, 10));
+  });
+  function step() {
+    var h = parseInt(slider.value, 10) + dir;
+    if (h <= 78) { h = 78; dir = 1; }
+    if (h >= 100) { h = 100; dir = -1; }
+    slider.value = h;
+    render(h);
+  }
+  function stop() {
+    if (timer) { clearInterval(timer); timer = null; }
+    playBtn.textContent = '▶ Play animation';
+  }
+  playBtn.addEventListener('click', function () {
+    if (timer) { stop(); return; }
+    dir = -1;
+    timer = setInterval(step, 60);
+    playBtn.textContent = '⏸ Pause animation';
+  });
+  render(100);
+  // Auto-play the live animation on load.
+  dir = -1;
+  timer = setInterval(step, 60);
+  playBtn.textContent = '⏸ Pause animation';
+
+  document.getElementById('copyBtn').addEventListener('click', function () {
+    var text = document.getElementById('runCommands').textContent;
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text).then(function () {
+        document.getElementById('copyBtn').textContent = 'Copied!';
+      });
+    }
+  });
+</script>
+<script src="crop-editor.js" defer></script>
+</body>
+</html>
