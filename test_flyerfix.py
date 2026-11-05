@@ -67,11 +67,10 @@ class CompareTests(unittest.TestCase):
         self.original = Image.new("RGB", (10, 10), "red")
         self.crop = Image.new("RGB", (10, 10), "blue")
 
-    def test_returns_stripped_content(self):
-        with patch.object(flyerfix, "urlopen", return_value=fake_ok("  Crop check  ")):
-            self.assertEqual(
-                flyerfix.compare(self.original, self.crop, "key"), "Crop check"
-            )
+    def test_returns_structured_sections(self):
+        sections = {"check": "Room 204 is missing", "caption": "Meet in Room 204", "verify": ""}
+        with patch.object(flyerfix, "urlopen", return_value=fake_ok(json.dumps(sections))):
+            self.assertEqual(flyerfix.compare(self.original, self.crop, "key"), sections)
 
     def test_401_points_at_the_key(self):
         error = HTTPError("url", 401, "Unauthorized", {}, None)

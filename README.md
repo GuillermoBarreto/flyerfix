@@ -4,6 +4,12 @@ FlyerFix helps community organizers check that key event details survive a socia
 
 **Hackathon theme:** Build for Your World.
 
+## Screenshot
+
+![FlyerFix desktop app comparing the original library flyer with its square crop, alongside an example caption](screenshot.jpg)
+
+The running desktop app is shown in sample preview mode with illustrative results.
+
 ## Run locally
 
 Use Python 3.10 or later with Tkinter and a Meta Model API key with access to Muse Spark 1.3.
@@ -13,7 +19,7 @@ python -m pip install -r requirements.txt
 python flyerfix.py
 ```
 
-Enter your key in the masked field or provide it through the MODEL_API_KEY environment variable. The app opens with a fictional library movie-night flyer and a square crop. Select **Compare with Muse Spark**. You can also choose your own images.
+Enter your key in the masked field or provide it through the MODEL_API_KEY environment variable. The app opens with a fictional library movie-night flyer and a square crop. Select **Compare with Muse Spark**. You can also choose your own images. Use **Copy caption** after reviewing the draft against the original.
 
 ## How it works
 

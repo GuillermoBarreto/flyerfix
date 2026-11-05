@@ -21,11 +21,12 @@ Use only visible information. For each essential event detail legible in the ori
 report it in a table with columns Detail, Original wording, and Crop status.
 Use these statuses: Visible, Missing, Hard to read, Changed. Mark partial details
 as Hard to read if they cannot be reliably recovered from the crop alone.
-Then write a standalone plain-text caption from the original, including all legible
-event logistics. Preserve exact dates, times, addresses and URLs as printed.
-Do not guess or fill gaps. Put anything unclear in a separate 'Verify before posting'
-section, outside the caption. Use headings 'Crop check', 'Caption', and
-'Verify before posting'. If the images appear unrelated, say so and omit the caption."""
+Return only a JSON object with three string fields:
+"check" is the crop check as plain text, one line per detail.
+"caption" is standalone post copy with the legible event details from the original.
+"verify" lists details the organizer needs to verify, or an empty string.
+Preserve exact dates, times, addresses and URLs. Do not fill gaps.
+If the images are unrelated, explain that in check and leave caption empty."""
 
 
 def load_image(path):
@@ -62,14 +63,29 @@ def compare(original, crop, key):
         raise ValueError(f"Meta API returned HTTP {error.code}. {message}") from error
     if not isinstance(result, str) or not result.strip():
         raise ValueError("Meta returned an empty comparison. Try again.")
-    return result.strip()
+    result = result.strip()
+    if result.startswith("```") and result.endswith("```"):
+        result = result.partition("\n")[2][:-3].strip()
+    sections = json.loads(result)
+    if not isinstance(sections, dict) or not all(
+        isinstance(sections.get(field), str) for field in ("check", "caption", "verify")
+    ):
+        raise ValueError("Meta returned an unexpected format. Try again.")
+    return sections
 
 
 def main():
     root = tk.Tk()
     root.title("FlyerFix | Check your crop before you post")
-    root.geometry("940x820")
-    root.minsize(660, 670)
+    root.geometry("1000x790")
+    root.minsize(690, 680)
+    style = ttk.Style(root)
+    style.theme_use("clam")
+    style.configure("TFrame", background="#f0f5fa")
+    style.configure("TLabel", background="#f0f5fa", foreground="#172d45")
+    style.configure("Accent.TButton", background="#1e5273", foreground="white", padding=(10, 6))
+    style.map("Accent.TButton", background=[("active", "#276b93")],
+              foreground=[("disabled", "#c2d4df")])
     panel = ttk.Frame(root, padding=18)
     panel.pack(fill="both", expand=True)
 
@@ -95,7 +111,7 @@ def main():
     def set_image(slot, path):
         image = load_image(path)
         preview = image.copy()
-        preview.thumbnail((300, 240))
+        preview.thumbnail((310, 256))
         photo = ImageTk.PhotoImage(preview)
         labels[slot].configure(image=photo)
         labels[slot].image = photo
@@ -125,20 +141,52 @@ def main():
     actions = ttk.Frame(panel)
     actions.pack(fill="x", pady=(8, 4))
     ttk.Label(panel, textvariable=status, wraplength=600).pack(anchor="w", pady=(0, 6))
-    output = ScrolledText(panel, wrap="word", height=10, font=("Segoe UI", 11), state="disabled")
-    output.pack(fill="both", expand=True)
+    results = ttk.Frame(panel)
+    results.pack(fill="both", expand=True)
+    results.columnconfigure((0, 1), weight=1, uniform="result")
+    results.rowconfigure(1, weight=1)
+    outputs = {}
+    for column, (field, title) in enumerate((("check", "Crop check"), ("caption", "Caption to review"))):
+        ttk.Label(results, text=title, font=("Segoe UI", 12, "bold")).grid(
+            row=0, column=column, sticky="w", padx=4, pady=(6, 3))
+        output = ScrolledText(results, wrap="word", height=8, font=("Segoe UI", 11),
+                              state="disabled", padx=10, pady=8, relief="flat",
+                              bg="white", fg="#172d45")
+        output.grid(row=1, column=column, sticky="nsew", padx=4)
+        outputs[field] = output
+    verify = tk.StringVar()
+    ttk.Label(panel, textvariable=verify, wraplength=650).pack(anchor="w", pady=(6, 0))
+    caption_text = ""
 
-    def write_output(value):
-        output.configure(state="normal")
-        output.delete("1.0", "end")
-        output.insert("1.0", value)
-        output.configure(state="disabled")
+    def write_output(sections=None):
+        nonlocal caption_text
+        sections = sections or {}
+        caption_text = sections.get("caption", "").strip()
+        for field, output in outputs.items():
+            output.configure(state="normal")
+            output.delete("1.0", "end")
+            output.insert("1.0", sections.get(field, "").strip())
+            output.configure(state="disabled")
+        note = sections.get("verify", "").strip()
+        verify.set(f"Verify before posting: {note}" if note else "")
+        copy_button.configure(state="normal" if caption_text else "disabled")
+
+    def copy_caption():
+        root.clipboard_clear()
+        root.clipboard_append(caption_text)
+        status.set("Caption copied. Review it against the original before posting.")
 
     def sample():
         set_image("Original flyer", SAMPLES / "original.png")
         set_image("Social media crop", SAMPLES / "crop.png")
-        write_output("")
-        status.set("Fictional sample loaded. Compare the images to check what the crop hides.")
+        write_output({
+            "check": "VISIBLE    Friday, November 20\nVISIBLE    7:00 p.m. • Free entry\n\n"
+                     "MISSING  Room 204\nMISSING  RSVP by Thursday, November 19",
+            "caption": "Join us for Movie Night at Cedar Park Library!\n\n"
+                       "Friday, November 20 at 7:00 p.m.\nRoom 204 • Free entry\n"
+                       "RSVP by Thursday, November 19.",
+        })
+        status.set("Sample preview · Illustrative results. Compare with Muse Spark to run the model.")
 
     def worker(original, crop, token):
         try:
@@ -153,7 +201,7 @@ def main():
         except queue.Empty:
             root.after(100, poll)
             return
-        write_output(result)
+        write_output(result if not error else None)
         status.set(error or "Comparison ready. Verify the caption against your original before posting.")
         for button in [run_button, sample_button, *picker_buttons]:
             button.configure(state="normal")
@@ -171,10 +219,12 @@ def main():
                          daemon=True).start()
         root.after(100, poll)
 
-    run_button = ttk.Button(actions, text="Compare with Muse Spark", command=run)
+    run_button = ttk.Button(actions, text="Compare with Muse Spark", command=run, style="Accent.TButton")
     run_button.pack(side="left", padx=(0, 8))
     sample_button = ttk.Button(actions, text="Load sample", command=sample)
     sample_button.pack(side="left")
+    copy_button = ttk.Button(actions, text="Copy caption", command=copy_caption)
+    copy_button.pack(side="right")
     sample()
     root.mainloop()
 
